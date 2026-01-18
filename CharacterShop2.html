@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Blockchain Character Shop</title>
+    <link rel="stylesheet" href="main.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.slim.min.js"></script>
+</head>
+
+<body>
+<div class="container">
+    <h1>Pokemon Shop (Blockchain DApp)</h1>
+
+    <div id="characters" class="grid"></div>
+
+    <h2>Ownership Table</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Character</th>
+            <th>Owner Address</th>
+            <th>Buy Time</th>
+        </tr>
+        </thead>
+        <tbody id="ownerTable"></tbody>
+    </table>
+
+    <h3>Status</h3>
+    <div id="result"></div>
+</div>
+
+<script type="module">
+import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.15.0/ethers.min.js";
+
+let provider, signer, contract;
+const contractAddress = "0x7D3D3C42665de2b5388087930E0f06F283BABB10";
+
+// map รูปให้ตรงกับ id ตัวละคร
+const images = {
+    1: "images/pikachu.jpg",
+    2: "images/charizard.jpg",
+    3: "images/bulbasaur.jpg",
+    4: "images/squirtle.jpg",
+    5: "images/jigglypuff.jpg",
+    6: "images/Mewtwo.jpg",
+    7: "images/Eevee.jpg",
+    8: "images/Snorlax.jpg",
+    9: "images/gengar.jpg",
+    10: "images/lucario.jpg",
+};
+
+const abi = [
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "buyer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "reason",
+				"type": "string"
+			}
+		],
+		"name": "BuyError",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "buyer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "time",
+				"type": "uint256"
+			}
+		],
+		"name": "CharacterBought",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			}
+		],
+		"name": "buyCharacter",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "characters",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "buyTime",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			}
+		],
+		"name": "getCharacter",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "id",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "name",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "price",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address",
+						"name": "owner",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "buyTime",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct CharacterShop.Character",
+				"name": "",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "totalCharacters",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]
+
+async function loadWeb3() {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    contract = new ethers.Contract(contractAddress, abi, signer);
+}
+
+async function loadCharacters() {
+    $("#characters").html("");
+    $("#ownerTable").html("");
+
+    for (let i = 1; i <= 10; i++) {
+        const c = await contract.getCharacter(i);
+        const priceEth = ethers.formatEther(c.price);
+
+        $("#characters").append(`
+    		<div class="card ${c.owner !== ethers.ZeroAddress ? "sold" : ""}">
+       		 <div class="image-box">
+            ${c.owner !== ethers.ZeroAddress ? `<div class="sold-badge">SOLD</div>` : ""}
+            <img src="${images[i]}" alt="${c.name}">
+        	</div>
+        	<h3>${c.name}</h3>
+        	<p>Price: ${priceEth} ETH</p>
+        	<button onclick="buy(${c.id}, '${priceEth}')"
+            ${c.owner !== ethers.ZeroAddress ? "disabled" : ""}>
+            ${c.owner === ethers.ZeroAddress ? "Buy" : "Sold"}
+        	</button>
+    		</div>
+		`);
+
+        if (c.owner !== ethers.ZeroAddress) {
+            const time = new Date(Number(c.buyTime) * 1000).toLocaleString();
+            $("#ownerTable").append(`
+                <tr>
+                    <td>${c.name}</td>
+                    <td>${c.owner}</td>
+                    <td>${time}</td>
+                </tr>
+            `);
+        }
+    }
+}
+
+window.buy = async function (id, price) {
+    try {
+        $("#result").html("Waiting for transaction...");
+        const tx = await contract.buyCharacter(id, {
+            value: ethers.parseEther(price)
+        });
+        $("#result").html("Transaction sent:<br>" + tx.hash);
+        await tx.wait();
+        $("#result").html("Purchase successful!");
+        loadCharacters();
+    } catch (err) {
+        $("#result").html("Error: " + err.message);
+    }
+};
+
+
+await loadWeb3();
+await loadCharacters();
+</script>
+</body>
+</html>
